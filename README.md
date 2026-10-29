@@ -1,8 +1,7 @@
 # Ce pot face acum?
 ### Organizarea responsabilităților și recuperarea timpului personal
 
-Proiect Individual — Butoi Alexandru-Gabriel  
-Stadiu: definirea ideii și a funcționalităților propuse.
+Proiect Individual - Butoi Alexandru - Gabriel
 
 ## Problema identificată
 
