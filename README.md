@@ -1,4 +1,4 @@
-# Ce pot face acum?
+# "Ce pot face acum?"
 ### Organizarea responsabilităților și recuperarea timpului personal
 
 Proiect Individual - Butoi Alexandru - Gabriel
