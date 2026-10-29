@@ -188,6 +188,273 @@ Recomandările vor folosi reguli explicite și filtrări. Prima versiune nu nece
 
 Organizarea propusă separă interfața grafică, modelele de date, logica de recomandare și accesul la date.
 
+## Arhitectura propusă
+
+Aplicația este împărțită în patru componente:
+
+- **Interfață:** calendarul, formularele și recomandările afișate.
+- **Logică:** verificarea programului și selectarea activităților potrivite.
+- **Modele:** obiectele care reprezintă evenimentele, activitățile și recomandările.
+- **Persistență:** citirea și salvarea datelor în SQLite.
+
+Săgețile indică folosirea unei componente de către alta.
+
+```mermaid
+flowchart TD
+    MAIN["Main.java"] --> UI["FereastraPrincipala.java"]
+
+    UI --> CAL["CalendarPanel.java"]
+    UI --> ACT["ActivitatiPanel.java"]
+    UI --> REC["RecomandariPanel.java"]
+
+    CAL --> CS["CalendarService.java"]
+    ACT --> AS["ActivitateService.java"]
+    REC --> RS["RecomandareService.java"]
+
+    RS --> CS
+    RS --> AS
+
+    CS --> ER["EvenimentRepository.java"]
+    AS --> AR["ActivitateRepository.java"]
+
+    ER --> DB["Database.java"]
+    AR --> DB
+    DB --> SQL[("SQLite")]
+```
+
+### Structura fișierelor
+
+```text
+src/main/java/ro/uvt/cepotfaceacum/
+    Main.java
+
+    model/
+        Eveniment.java
+        Activitate.java
+        ContextActual.java
+        Recomandare.java
+
+    ui/
+        FereastraPrincipala.java
+        CalendarPanel.java
+        ActivitatiPanel.java
+        RecomandariPanel.java
+
+    service/
+        CalendarService.java
+        ActivitateService.java
+        RecomandareService.java
+
+    repository/
+        Database.java
+        EvenimentRepository.java
+        ActivitateRepository.java
+```
+
+### Responsabilitățile fișierelor
+
+#### Pornirea aplicației
+
+- **`Main.java`**
+  - Inițializează baza de date și componentele aplicației.
+  - Deschide interfața grafică.
+
+#### Modele
+
+- **`Eveniment.java`**
+  - Reprezintă un interval ocupat din calendar.
+  - Conține identificatorul, titlul, începutul și sfârșitul.
+  - Include informațiile necesare repetării săptămânale.
+
+- **`Activitate.java`**
+  - Reprezintă o responsabilitate sau o activitate personală.
+  - Conține durata estimată, durata minimă opțională, termenul și prioritatea.
+  - Păstrează condițiile necesare și starea activității.
+  - Reține dacă utilizatorul dorește recuperarea unei activități amânate.
+
+- **`ContextActual.java`**
+  - Reprezintă momentul și condițiile pentru care sunt cerute recomandări.
+  - Conține data, ora, locația declarată și resursele disponibile.
+  - Poate include timpul disponibil introdus de utilizator.
+
+- **`Recomandare.java`**
+  - Conține activitatea sugerată, intervalul propus și explicația.
+  - Este calculată pe baza datelor actuale, fără a ocupa automat calendarul.
+
+#### Interfață
+
+- **`FereastraPrincipala.java`**
+  - Organizează navigarea între cele trei ecrane.
+  - Actualizează ecranele după modificarea datelor.
+
+- **`CalendarPanel.java`**
+  - Afișează calendarul săptămânal.
+  - Permite adăugarea, modificarea și ștergerea evenimentelor.
+  - Afișează conflictele semnalate de logica aplicației.
+
+- **`ActivitatiPanel.java`**
+  - Afișează responsabilitățile și activitățile personale.
+  - Permite adăugarea, editarea, finalizarea și eliminarea lor.
+  - Permite marcarea unei activități personale pentru recuperare.
+
+- **`RecomandariPanel.java`**
+  - Permite introducerea contextului actual.
+  - Afișează sugestiile și explicațiile.
+  - Permite acceptarea, refuzarea sau solicitarea altor variante.
+  - Permite alegerea unei pauze fără activitate planificată.
+
+#### Logica aplicației
+
+- **`CalendarService.java`**
+  - Validează intervalele și verifică suprapunerile.
+  - Calculează aparițiile evenimentelor recurente.
+  - Identifică intervalele disponibile, respectând perioadele rezervate.
+  - Adaugă în calendar o recomandare acceptată, după reverificarea intervalului.
+
+- **`ActivitateService.java`**
+  - Validează și gestionează activitățile.
+  - Actualizează progresul și timpul estimat rămas.
+  - Înregistrează amânările și preferința de recuperare.
+  - Elimină marcajul de recuperare după realizare sau la cererea utilizatorului.
+
+- **`RecomandareService.java`**
+  - Solicită intervalele disponibile și activitățile eligibile.
+  - Filtrează după durată și condițiile necesare.
+  - Ia în calcul termenele apropiate și activitățile personale amânate.
+  - Poate include o sugestie de pauză pe baza timpului de lucru declarat.
+  - Returnează câteva opțiuni și explică alegerea lor.
+
+#### Persistență
+
+- **`Database.java`**
+  - Gestionează conexiunea la SQLite.
+  - Creează tabelele necesare la prima pornire.
+
+- **`EvenimentRepository.java`**
+  - Citește, adaugă, modifică și șterge evenimentele din baza de date.
+
+- **`ActivitateRepository.java`**
+  - Citește și salvează activitățile, stările și informațiile de recuperare.
+
+## Fluxurile principale
+
+### 1. Introducerea sau modificarea programului
+
+```mermaid
+flowchart TD
+    A["Deschide calendarul"] --> B["Adaugă sau modifică un eveniment"]
+    B --> C["Completează titlul și intervalul"]
+    C --> D{"Date valide?"}
+    D -->|Nu| E["Explică eroarea"]
+    E --> C
+    D -->|Da| F{"Există suprapuneri?"}
+    F -->|Da| G["Afișează conflictul"]
+    G --> C
+    F -->|Nu| H["Salvează evenimentul"]
+    H --> I["Actualizează calendarul"]
+```
+
+Interpretare:
+
+1. Utilizatorul selectează o zi sau un eveniment existent.
+2. Completează datele și eventuala repetare săptămânală.
+3. Aplicația verifică intervalul și suprapunerile.
+4. Dacă există un conflict, utilizatorul îl corectează.
+5. Evenimentul valid este salvat și afișat.
+
+### 2. Adăugarea unei activități
+
+```mermaid
+flowchart TD
+    A["Adaugă o activitate"] --> B{"Tipul activității?"}
+    B -->|Responsabilitate| C["Durată, prioritate și termen opțional"]
+    B -->|Personală| D["Durată și preferințe"]
+    C --> E["Completează condițiile necesare"]
+    D --> E
+    E --> F{"Date valide?"}
+    F -->|Nu| G["Explică eroarea"]
+    G --> E
+    F -->|Da| H["Salvează activitatea"]
+```
+
+Interpretare:
+
+1. Utilizatorul alege între responsabilitate și activitate personală.
+2. Completează durata și informațiile relevante.
+3. Precizează condițiile, precum accesul la laptop sau prezența acasă.
+4. Aplicația validează datele și salvează activitatea.
+
+### 3. Obținerea recomandărilor
+
+```mermaid
+flowchart TD
+    A["Ce pot face acum?"] --> B["Citește contextul și programul"]
+    B --> C["Calculează timpul disponibil"]
+    C --> D{"Există un interval utilizabil?"}
+    D -->|Nu| E["Afișează următorul interval disponibil"]
+    D -->|Da| F["Filtrează activitățile după durată și condiții"]
+    F --> G["Evaluează urgențele, recuperările și pauzele"]
+    G --> H["Afișează opțiuni explicate"]
+    H --> I{"Alegerea utilizatorului"}
+    I -->|Acceptă| J["Reverifică și rezervă intervalul"]
+    I -->|Alte variante| K["Propune alte opțiuni eligibile"]
+    I -->|Timp liber| L["Păstrează intervalul neplanificat"]
+    K --> H
+```
+
+Interpretare:
+
+1. Utilizatorul declară contextul actual.
+2. Aplicația calculează timpul disponibil, cu o rezervă pentru tranziție.
+3. Selectează activitățile realizabile în acel context.
+4. Ia în calcul responsabilitățile urgente și activitățile personale amânate.
+5. Prezintă câteva opțiuni, fără a le introduce automat în calendar.
+6. La acceptare, verifică din nou disponibilitatea și salvează alegerea.
+7. Dacă nu există o activitate potrivită, permite păstrarea timpului liber.
+
+### 4. Amânarea și recuperarea unei activități personale
+
+```mermaid
+flowchart TD
+    A["Programul se prelungește"] --> B["Utilizatorul actualizează calendarul"]
+    B --> C["Identifică activitatea personală amânată"]
+    C --> D{"Dorește să o recupereze?"}
+    D -->|Nu| E["Nu creează o obligație de recuperare"]
+    D -->|Da| F["Salvează preferința de recuperare"]
+    F --> G["La următoarea cerere de recomandări"]
+    G --> H{"Există timp și condiții potrivite?"}
+    H -->|Nu| I["Păstrează activitatea pentru alt moment"]
+    H -->|Da| J["Propune recuperarea"]
+    J --> K{"Acceptă?"}
+    K -->|Da| L["Adaugă activitatea în calendar"]
+    K -->|Mai târziu| I
+    K -->|Nu mai dorește| M["Oprește recomandările de recuperare"]
+```
+
+Interpretare:
+
+1. Prelungirea unei responsabilități nu șterge automat activitățile personale.
+2. Utilizatorul decide ce amână și dacă dorește recuperarea.
+3. Activitatea devine eligibilă pentru sugestii viitoare.
+4. Recomandarea apare când utilizatorul solicită opțiuni și există condiții potrivite.
+5. Acceptarea rezervă timp; realizarea efectivă se confirmă separat.
+6. Utilizatorul poate renunța oricând la recuperare.
+
+## Corespondența dintre funcționalități și implementare
+
+| Funcționalitate | Interfață | Logică principală | Date persistente |
+|---|---|---|---|
+| Calendar săptămânal | `CalendarPanel` | `CalendarService` | `EvenimentRepository` |
+| Responsabilități flexibile | `ActivitatiPanel` | `ActivitateService` | `ActivitateRepository` |
+| Activități personale | `ActivitatiPanel` | `ActivitateService` | `ActivitateRepository` |
+| Înregistrarea amânărilor | `ActivitatiPanel` | `ActivitateService` | `ActivitateRepository` |
+| Calcularea timpului disponibil | `RecomandariPanel` | `CalendarService` | `EvenimentRepository` |
+| Recomandări și pauze | `RecomandariPanel` | `RecomandareService` | Date citite din ambele repository-uri |
+| Recuperarea timpului personal | `RecomandariPanel` | `RecomandareService`, `ActivitateService` | Ambele repository-uri |
+| Salvare locală | Toate ecranele, prin servicii | Serviciile corespunzătoare | `Database` și repository-uri |
+
+Structura este propusă pentru prima versiune și va fi actualizată odată cu implementarea. După validarea cerințelor, fiecare funcționalitate va primi un identificator pentru a putea fi urmărită până la cod și scenariile de verificare.
+
 ## Etape următoare
 
 ### A. Prezentarea proiectului — etapa actuală
